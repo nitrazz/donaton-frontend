@@ -1,3 +1,5 @@
+import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
+import { msalConfig, tokenRequest } from '../authConfig';
 import type {
   Envio,
   EnvioFallback,
@@ -10,16 +12,53 @@ import type {
 } from '../types';
 
 // ─── URL BASE DEL BFF ─────────────────────────────────────────────────────────
-const API_BASE = 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:8080';
+
+// Instancia interna de MSAL para obtener el token en peticiones de API
+const msalInstance = new PublicClientApplication(msalConfig);
+
+/**
+ * Obtiene el Token JWT de Entra ID silenciosamente o abre Popup si vence la sesión.
+ */
+async function getAccessToken(): Promise<string | null> {
+  await msalInstance.initialize();
+  const accounts = msalInstance.getAllAccounts();
+  
+  if (accounts.length === 0) {
+    return null; // Si es una ruta pública o no hay usuario autenticado
+  }
+
+  try {
+    const response = await msalInstance.acquireTokenSilent({
+      ...tokenRequest,
+      account: accounts[0],
+    });
+    return response.accessToken;
+  } catch (error) {
+    if (error instanceof InteractionRequiredAuthError) {
+      const response = await msalInstance.acquireTokenPopup(tokenRequest);
+      return response.accessToken;
+    }
+    console.error('Error al adquirir token:', error);
+    return null;
+  }
+}
 
 // ─── Cliente base ─────────────────────────────────────────────────────────────
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  // Concatenamos la URL base para que apunte al puerto 8080 de tu BFF
   const url = `${API_BASE}${path}`;
-  
+  const token = await getAccessToken();
+
+  // Encabezados dinámicos inyectando Authorization Bearer si existe token
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options?.headers as Record<string, string>),
+  };
+
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
+    headers,
   });
 
   if (!res.ok) {
