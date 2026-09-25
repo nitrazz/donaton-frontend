@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAdminAuth } from './../../hooks/useAdminAuth';
 
 export interface NavItem {
   key: string;
@@ -19,7 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'acopios',     label: 'Centros de Acopio',icon: '🏪', section: 'Logística'    },
   { key: 'necesidades', label: 'Reportes (Admin)', icon: '📋', section: 'Necesidades'  },
   { key: 'reportar',    label: 'Solicitar Ayuda',  icon: '➕', section: 'Necesidades'  },
-  {key:'donaciones', label: 'Donación',icon: '🤝', section:'Donación'}
+  { key: 'donaciones',  label: 'Donación',         icon: '🤝', section: 'Donación'     }
 ];
 
 // Agrupar por sección
@@ -40,6 +41,19 @@ function groupBySección(items: NavItem[]) {
  */
 export const Sidebar: React.FC<SidebarProps> = ({ activeKey, onNavigate, className = '' }) => {
   const grouped = groupBySección(NAV_ITEMS);
+  const { authenticateAdmin, loading, error } = useAdminAuth();
+
+  const handleNavigation = async (key: string) => {
+    // Interceptar solo si se presiona la opción de Reportes (Admin)
+    if (key === 'necesidades') {
+      const isAdmin = await authenticateAdmin();
+      if (isAdmin) {
+        onNavigate(key);
+      }
+    } else {
+      onNavigate(key);
+    }
+  };
 
   return (
     <nav
@@ -87,10 +101,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeKey, onNavigate, classNa
             </p>
             {items.map((item) => {
               const isActive = item.key === activeKey;
+              const isAuthenticatingAdmin = loading && item.key === 'necesidades';
+
               return (
                 <button
                   key={item.key}
-                  onClick={() => onNavigate(item.key)}
+                  onClick={() => handleNavigation(item.key)}
+                  disabled={isAuthenticatingAdmin}
                   aria-current={isActive ? 'page' : undefined}
                   style={{
                     display:        'flex',
@@ -104,20 +121,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeKey, onNavigate, classNa
                     color:          isActive ? '#993C1D' : '#5F5E5A',
                     fontWeight:     isActive ? 500 : 400,
                     fontSize:       '13.5px',
-                    cursor:         'pointer',
+                    cursor:         isAuthenticatingAdmin ? 'wait' : 'pointer',
                     fontFamily:     'inherit',
                     textAlign:      'left',
                     marginBottom:   '2px',
                     transition:     'all 0.15s',
+                    opacity:        isAuthenticatingAdmin ? 0.6 : 1,
                   }}
                 >
                   <span aria-hidden="true">{item.icon}</span>
-                  {item.label}
+                  {isAuthenticatingAdmin ? 'Autenticando...' : item.label}
                 </button>
               );
             })}
           </div>
         ))}
+
+        {/* Notificación de error en permisos */}
+        {error && (
+          <p style={{ padding: '0 0.5rem', color: '#D32F2F', fontSize: '11px', marginTop: '4px' }}>
+            ⚠️ {error}
+          </p>
+        )}
       </div>
     </nav>
   );

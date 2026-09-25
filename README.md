@@ -150,7 +150,7 @@ npm run build      # CJS + ESM en dist/
 npm run typecheck  # Solo verificación de tipos
 npm run test       # Vitest
 ```
-
+dependencias azure: npm install @azure/msal-browser @azure/msal-react
 ---
 
 ## Licencia
